@@ -375,6 +375,22 @@ size_t DrmBackend::gpuCount() const
 
 OutputConfigurationError DrmBackend::applyOutputChanges(const OutputConfiguration &config)
 {
+    if (!m_session->isActive()) {
+        // While the session is not active on its seat we hold no DRM master,
+        // so nothing can be committed to the outputs on that seat:
+        // testPendingConfiguration() fails with EACCES and the configuration
+        // is refused as a whole. Virtual outputs need no master — they are
+        // drawn into a buffer for a screen cast consumer that is not on the
+        // seat — so they must not be taken down with it: a virtual output
+        // created while the session is away would otherwise never become one
+        // the compositor shows. The outputs on the seat are left exactly as
+        // they are, and are configured again when the session comes back.
+        for (DrmVirtualOutput *output : std::as_const(m_virtualOutputs)) {
+            output->applyChanges(config);
+        }
+        return OutputConfigurationError::None;
+    }
+
     QList<DrmOutput *> toBeEnabled;
     QList<DrmOutput *> toBeDisabled;
     for (const auto &gpu : m_gpus) {
