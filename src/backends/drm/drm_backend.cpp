@@ -367,8 +367,38 @@ size_t DrmBackend::gpuCount() const
     return m_gpus.size();
 }
 
+bool DrmBackend::changesOutputsOnSeat(const OutputConfiguration &config) const
+{
+    for (const auto &gpu : m_gpus) {
+        const auto outputs = gpu->drmOutputs();
+        for (DrmOutput *output : outputs) {
+            if (output->isNonDesktop()) {
+                continue;
+            }
+            if (config.constChangeSet(output)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::expected<void, OutputError> DrmBackend::applyOutputChanges(const OutputConfiguration &config)
 {
+    if (!m_session->isActive() && !changesOutputsOnSeat(config)) {
+        // Without DRM master nothing can be committed for the outputs on the
+        // seat, so testPendingConfiguration() below would fail with EACCES and
+        // reject the configuration as a whole - including the changes to the
+        // virtual outputs, which need no master and could have been applied.
+        // A configuration that leaves the outputs on the seat alone therefore
+        // skips the part that needs master. One that does change them is left
+        // to fail as before, rather than silently dropping those changes.
+        for (DrmVirtualOutput *output : std::as_const(m_virtualOutputs)) {
+            output->applyChanges(config);
+        }
+        return {};
+    }
+
     QList<DrmOutput *> toBeEnabled;
     QList<DrmOutput *> toBeDisabled;
     for (const auto &gpu : m_gpus) {

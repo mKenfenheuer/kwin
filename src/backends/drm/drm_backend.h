@@ -78,6 +78,7 @@ private:
     void removeOutput(BackendOutput *output);
     void handleUdevEvent();
     DrmGpu *addGpu(const QString &fileName);
+    bool changesOutputsOnSeat(const OutputConfiguration &config) const;
 
     std::unique_ptr<Udev> m_udev;
     std::unique_ptr<UdevMonitor> m_udevMonitor;
